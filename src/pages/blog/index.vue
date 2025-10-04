@@ -5,7 +5,7 @@
       description="Browse all published articles from microCMS."
     />
 
-    <p v-if="error" class="blog-index__status">{{ error }}</p>
+    <p v-if="statusMessage" class="blog-index__status">{{ statusMessage }}</p>
     <p v-else-if="loading" class="blog-index__status">Loading articles...</p>
     <BlogList v-else :articles="articles" />
 
@@ -32,11 +32,10 @@
 <script setup lang="ts">
 import PageHeader from '~/components/ui/PageHeader.vue';
 import BlogList from '~/components/blog/BlogList.vue';
-import { useBlogStore } from '~/store/blog';
+import type { ArticleListResponse } from '~/types/blog';
 import { useSiteMeta } from '~/composables/useSiteMeta';
 
 const limit = 10;
-const blogStore = useBlogStore();
 const route = useRoute();
 
 const currentPage = computed(() => {
@@ -46,16 +45,32 @@ const currentPage = computed(() => {
 
 useSiteMeta('Blog Articles | microCMS Blog', 'Browse the full list of blog articles powered by microCMS.');
 
-await useAsyncData('blog-index', async () => {
-  const offset = (currentPage.value - 1) * limit;
-  await blogStore.loadArticles({ limit, offset, orders: '-publishedAt' });
-  return true;
+const offset = computed(() => (currentPage.value - 1) * limit);
+
+const {
+  data: response,
+  pending,
+  error,
+  refresh
+} = await useFetch<ArticleListResponse>(() => '/api/news', {
+  query: () => ({
+    limit,
+    offset: offset.value,
+    orders: '-publishedAt'
+  })
 });
 
-const articles = computed(() => blogStore.articles);
-const totalPages = computed(() => Math.ceil(blogStore.totalCount / limit) || 1);
-const loading = computed(() => blogStore.loading);
-const error = computed(() => blogStore.error);
+watch(currentPage, () => {
+  refresh();
+});
+
+const articles = computed(() => response.value?.contents ?? []);
+const totalPages = computed(() => {
+  const total = response.value?.totalCount ?? 0;
+  return total > 0 ? Math.ceil(total / limit) : 1;
+});
+const loading = computed(() => pending.value);
+const statusMessage = computed(() => error.value?.message ?? null);
 
 const pageHref = (page: number) => ({
   path: '/blog',

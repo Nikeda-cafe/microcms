@@ -4,7 +4,6 @@ export default defineNuxtConfig({
     strict: true,
     shim: false
   },
-  modules: ['@pinia/nuxt'],
   runtimeConfig: {
     microcmsServiceDomain: process.env.MICROCMS_SERVICE_DOMAIN || '',
     microcmsApiKey: process.env.MICROCMS_API_KEY || '',

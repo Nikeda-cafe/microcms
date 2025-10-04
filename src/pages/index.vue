@@ -10,7 +10,7 @@
         <h2>Latest Articles</h2>
         <NuxtLink class="home__more" to="/blog">View all</NuxtLink>
       </header>
-      <p v-if="error" class="home__error">{{ error }}</p>
+      <p v-if="errorMessage" class="home__error">{{ errorMessage }}</p>
       <p v-else-if="loading" class="home__loading">Loading articles...</p>
       <BlogList v-else :articles="latestArticles" />
     </section>
@@ -27,25 +27,30 @@
 <script setup lang="ts">
 import PageHeader from '~/components/ui/PageHeader.vue';
 import BlogList from '~/components/blog/BlogList.vue';
-import { useBlogStore } from '~/store/blog';
+import type { ArticleListResponse } from '~/types/blog';
 import { useSiteMeta } from '~/composables/useSiteMeta';
-
-const blogStore = useBlogStore();
 
 useSiteMeta('microCMS Blog', 'Nuxt3 application using microCMS for headless content management.');
 
-await useAsyncData('home-articles', async () => {
-  await Promise.all([
-    blogStore.loadArticles({ limit: 6, orders: '-publishedAt' }),
-    blogStore.loadPopularArticles(3)
-  ]);
-  return true;
+const {
+  data: latestResponse,
+  pending: latestPending,
+  error: latestError
+} = await useFetch<ArticleListResponse>('/api/news', {
+  query: { limit: 6, orders: '-publishedAt' }
 });
 
-const latestArticles = computed(() => blogStore.articles);
-const popularArticles = computed(() => blogStore.popularArticles);
-const loading = computed(() => blogStore.loading);
-const error = computed(() => blogStore.error);
+const {
+  data: popularResponse,
+  error: popularError
+} = await useFetch<ArticleListResponse>('/api/news', {
+  query: { limit: 3, orders: '-publishedAt' }
+});
+
+const latestArticles = computed(() => latestResponse.value?.contents ?? []);
+const popularArticles = computed(() => (popularError.value ? [] : popularResponse.value?.contents ?? []));
+const loading = computed(() => latestPending.value);
+const errorMessage = computed(() => latestError.value?.message ?? null);
 </script>
 
 <style scoped>

@@ -16,8 +16,9 @@
     />
     <div class="article__body" v-html="html"></div>
   </article>
-  <p v-else-if="error" class="article__status">{{ errorMessage }}</p>
-  <p v-else class="article__status">Loading article...</p>
+  <p v-else-if="errorMessage" class="article__status">{{ errorMessage }}</p>
+  <p v-else-if="isLoading" class="article__status">Loading article...</p>
+  <p v-else class="article__status">Article unavailable.</p>
 </template>
 
 <script setup lang="ts">
@@ -25,28 +26,31 @@ import { createError } from '#app';
 import PageHeader from '~/components/ui/PageHeader.vue';
 import ArticleMeta from '~/components/blog/ArticleMeta.vue';
 import { renderMarkdown } from '~/utils/markdown';
-import { fetchArticleBySlug } from '~/utils/microcms';
 import { useSiteMeta } from '~/composables/useSiteMeta';
+import type { Article } from '~/types/blog';
 
 const route = useRoute();
 const slug = computed(() => String(route.params.slug));
 
-const { data, error } = await useAsyncData(`article-${slug.value}`, async () => {
-  const article = await fetchArticleBySlug(slug.value);
-  if (!article) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Article not found'
-    });
-  }
-  return article;
+const {
+  data,
+  pending,
+  error
+} = await useFetch<Article>(() => `/api/news/${slug.value}`, {
+  key: computed(() => `article-${slug.value}`)
 });
+
+if (error.value?.statusCode === 404) {
+  throw createError({
+    statusCode: 404,
+    statusMessage: 'Article not found'
+  });
+}
 
 const article = computed(() => data.value ?? null);
 const html = computed(() => (article.value ? renderMarkdown(article.value.body) : ''));
-const errorMessage = computed(
-  () => error.value?.message || 'Failed to load the requested article.'
-);
+const errorMessage = computed(() => error.value?.message || null);
+const isLoading = computed(() => pending.value && !article.value && !error.value);
 
 watchEffect(() => {
   if (article.value) {
