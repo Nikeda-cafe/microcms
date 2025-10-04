@@ -21,53 +21,6 @@ export interface MicroCMSArticle {
 
 export const ARTICLE_ENDPOINT = 'news';
 
-const sampleCategory: Category = {
-  id: 'news',
-  name: 'News',
-  slug: 'news'
-};
-
-const sampleTag: Tag = {
-  id: 'nuxt',
-  name: 'Nuxt',
-  slug: 'nuxt'
-};
-
-export const sampleArticles: Article[] = [
-  {
-    id: 'welcome-to-the-blog',
-    slug: 'welcome-to-the-blog',
-    title: 'Welcome to the Nuxt3 + microCMS Blog',
-    description: 'Overview of the demo blog powered by Nuxt3, Pinia, and microCMS.',
-    body: '# Welcome\nThis is sample content rendered with **Markdown**.',
-    category: sampleCategory,
-    tags: [sampleTag],
-    publishedAt: '2024-01-01T00:00:00.000Z',
-    updatedAt: '2024-01-01T00:00:00.000Z',
-    eyecatch: {
-      url: 'https://placehold.co/800x400',
-      width: 800,
-      height: 400
-    }
-  },
-  {
-    id: 'getting-started-with-nuxt3',
-    slug: 'getting-started-with-nuxt3',
-    title: 'Getting Started with Nuxt3',
-    description: 'Learn how this project uses Nuxt3 features together with microCMS.',
-    body: '## Getting Started\nSet MICROCMS credentials to fetch real data.',
-    category: sampleCategory,
-    tags: [sampleTag],
-    publishedAt: '2024-01-08T00:00:00.000Z',
-    updatedAt: '2024-01-08T00:00:00.000Z',
-    eyecatch: {
-      url: 'https://placehold.co/800x400?text=Nuxt3',
-      width: 800,
-      height: 400
-    }
-  }
-];
-
 export const sanitizeServiceDomain = (value: string): string => {
   const trimmed = value?.trim() ?? '';
   return trimmed
@@ -131,36 +84,7 @@ const sortArticles = (articles: Article[], orders?: string) => {
   });
 };
 
-export const buildSampleList = (params: SampleListParams = {}): ArticleListResponse => {
-  const { limit, offset, orders, category, tag } = params;
-  let articles = [...sampleArticles];
 
-  if (category) {
-    articles = articles.filter((article) => article.category?.slug === category);
-  }
-
-  if (tag) {
-    articles = articles.filter((article) =>
-      article.tags.some((entry) => entry.slug === tag)
-    );
-  }
-
-  articles = sortArticles(articles, orders);
-
-  const safeOffset = Math.max(0, offset ?? 0);
-  const safeLimit = limit ?? articles.length;
-
-  return {
-    totalCount: articles.length,
-    offset: safeOffset,
-    limit: safeLimit,
-    contents: articles.slice(safeOffset, safeOffset + safeLimit)
-  };
-};
-
-export const findSampleArticle = (slug: string): Article | null => {
-  return sampleArticles.find((article) => article.slug === slug || article.id === slug) ?? null;
-};
 
 export const buildMicroCMSQueries = (params: SampleListParams): MicroCMSQueries => {
   const queries: MicroCMSQueries = {};

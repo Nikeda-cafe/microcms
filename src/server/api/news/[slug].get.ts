@@ -3,7 +3,6 @@ import type { Article } from '~/types/blog';
 import {
   ARTICLE_ENDPOINT,
   createMicroCMSClient,
-  findSampleArticle,
   mapArticle,
   type MicroCMSArticle
 } from '~/server/utils/microcms-helpers';
@@ -17,15 +16,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const client = createMicroCMSClient();
-
   if (!client) {
-    const article = findSampleArticle(slug);
-    if (!article) {
-      throw createError({ statusCode: 404, statusMessage: 'Article not found' });
-    }
-    return article;
+    throw createError({ statusCode: 502, statusMessage: 'MicroCMS client is not available' });
   }
-
   try {
     const entry = await client.getListDetail<MicroCMSArticle>({
       endpoint: ARTICLE_ENDPOINT,

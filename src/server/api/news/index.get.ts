@@ -3,7 +3,6 @@ import type { ArticleListResponse } from '~/types/blog';
 import {
   ARTICLE_ENDPOINT,
   buildMicroCMSQueries,
-  buildSampleList,
   createMicroCMSClient,
   mapArticle,
   parseQueryParams,
@@ -15,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const client = createMicroCMSClient();
 
   if (!client) {
-    return buildSampleList(params);
+    throw createError({ statusCode: 502, statusMessage: 'MicroCMS client is not available' });
   }
 
   const queries = buildMicroCMSQueries(params);
