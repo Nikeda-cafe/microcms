@@ -3,11 +3,25 @@ import {
   type MicroCMSListResponse,
   type MicroCMSQueries
 } from 'microcms-js-sdk';
-import type { Article, Category, Tag } from '~/types/blog';
+import type { Article, Category, Tag, EyecatchImage } from '~/types/blog';
 
 type MicroCMSClient = ReturnType<typeof createClient> | null;
 
-interface MicroCMSArticle extends Article {}
+interface MicroCMSArticle {
+  id: string;
+  slug?: string;
+  title: string;
+  description?: string;
+  body: string;
+  category?: Category | null;
+  tags?: Tag[];
+  eyecatch?: EyecatchImage | null;
+  thumbnail?: EyecatchImage | null;
+  publishedAt: string;
+  updatedAt: string;
+}
+
+const ARTICLE_ENDPOINT = 'news';
 
 const sampleCategory: Category = {
   id: 'news',
@@ -68,7 +82,7 @@ const mapArticle = (entry: MicroCMSArticle): Article => ({
   tags: entry.tags ?? [],
   publishedAt: entry.publishedAt,
   updatedAt: entry.updatedAt,
-  eyecatch: entry.eyecatch ?? null
+  eyecatch: entry.eyecatch ?? entry.thumbnail ?? null
 });
 
 const getClient = (): MicroCMSClient => {
@@ -120,7 +134,7 @@ export const fetchArticles = async (
   }
 
   const response = await client.getList<MicroCMSArticle>({
-    endpoint: 'articles',
+    endpoint: ARTICLE_ENDPOINT,
     queries
   });
 
@@ -143,20 +157,28 @@ export const fetchArticleBySlug = async (slug: string): Promise<Article | null> 
     return sampleArticles.find((article) => article.slug === slug) ?? null;
   }
 
-  const response = await client.getList<MicroCMSArticle>({
-    endpoint: 'articles',
-    queries: {
-      filters: `slug[equals]${slug}`,
-      limit: 1,
-      depth: 2
+  try {
+    const entry = await client.getListDetail<MicroCMSArticle>({
+      endpoint: ARTICLE_ENDPOINT,
+      contentId: slug
+    });
+    return mapArticle(entry);
+  } catch (_error) {
+    const response = await client.getList<MicroCMSArticle>({
+      endpoint: ARTICLE_ENDPOINT,
+      queries: {
+        filters: `slug[equals]${slug}`,
+        limit: 1,
+        depth: 2
+      }
+    });
+
+    if (!response.contents.length) {
+      return null;
     }
-  });
 
-  if (!response.contents.length) {
-    return null;
+    return mapArticle(response.contents[0]);
   }
-
-  return mapArticle(response.contents[0]);
 };
 
 export const fetchArticlesByCategory = async (
@@ -173,7 +195,7 @@ export const fetchArticlesByCategory = async (
   }
 
   const response = await client.getList<MicroCMSArticle>({
-    endpoint: 'articles',
+    endpoint: ARTICLE_ENDPOINT,
     queries: {
       ...queries,
       filters: `category[equals]${categorySlug}`
@@ -202,7 +224,7 @@ export const fetchArticlesByTag = async (
   }
 
   const response = await client.getList<MicroCMSArticle>({
-    endpoint: 'articles',
+    endpoint: ARTICLE_ENDPOINT,
     queries: {
       ...queries,
       filters: `tags[contains]${tagSlug}`
@@ -227,9 +249,10 @@ export const fetchPopularArticles = async (
   }
 
   const response = await client.getList<MicroCMSArticle>({
-    endpoint: 'articles',
+    endpoint: ARTICLE_ENDPOINT,
     queries: {
-      orders: '-popularity',
+      ...queries,
+      orders: queries?.orders ?? '-publishedAt',
       limit: queries?.limit ?? 5
     }
   });
