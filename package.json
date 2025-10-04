@@ -1,0 +1,33 @@
+{
+  "name": "nuxt3-microcms-blog",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "lint": "eslint . --ext .ts,.js,.vue",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@pinia/nuxt": "^0.5.1",
+    "markdown-it": "^13.0.2",
+    "microcms-js-sdk": "^3.1.0",
+    "nuxt": "^3.12.0",
+    "pinia": "^2.1.7"
+  },
+  "devDependencies": {
+    "@nuxtjs/eslint-config-typescript": "^12.0.0",
+    "@testing-library/vue": "^7.0.0",
+    "@types/node": "^20.11.19",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "@vue/test-utils": "^2.4.4",
+    "eslint": "^8.56.0",
+    "eslint-plugin-vue": "^9.20.1",
+    "jsdom": "^22.1.0",
+    "typescript": "^5.3.3",
+    "vitest": "^0.34.6"
+  }
+}
