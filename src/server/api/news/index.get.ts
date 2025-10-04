@@ -1,32 +1,24 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
-import { useRuntimeConfig } from '#imports';
 import type { ArticleListResponse } from '~/types/blog';
 import {
   ARTICLE_ENDPOINT,
   buildMicroCMSQueries,
-  buildSampleListResponse,
-  buildSampleQueries,
-  getMicroCMSClient,
+  buildSampleList,
+  createMicroCMSClient,
   mapArticle,
-  sanitizeServiceDomain,
+  parseQueryParams,
   type MicroCMSArticle
 } from '~/server/utils/microcms-helpers';
 
 export default defineEventHandler(async (event) => {
-  const query = getQuery(event);
-  if (process.dev && process.server) {
-    console.log('[api/news] incoming query', query);
-  }
-  const client = getMicroCMSClient();
+  const params = parseQueryParams(getQuery(event));
+  const client = createMicroCMSClient();
 
   if (!client) {
-    if (process.dev && process.server) {
-      console.warn('[api/news] microCMS client unavailable, using sample data');
-    }
-    return buildSampleListResponse(buildSampleQueries(query));
+    return buildSampleList(params);
   }
 
-  const queries = buildMicroCMSQueries(query);
+  const queries = buildMicroCMSQueries(params);
 
   try {
     const response = await client.getList<MicroCMSArticle>({
@@ -42,26 +34,11 @@ export default defineEventHandler(async (event) => {
     };
 
     if (process.dev && process.server) {
-      const params = new URLSearchParams();
-      Object.entries(queries).forEach(([key, value]) => {
-        if (value !== undefined) {
-          params.set(key, String(value));
-        }
-      });
-      const { microcmsServiceDomain } = useRuntimeConfig();
-      const domain = sanitizeServiceDomain(microcmsServiceDomain ?? '');
-      if (domain) {
-        const baseUrl = `https://${domain}.microcms.io/api/v1/${ARTICLE_ENDPOINT}`;
-        const queryString = params.toString();
-        console.log('[api/news] GET', queryString ? `${baseUrl}?${queryString}` : baseUrl);
-      }
+      console.log('[api/news] fetched from microCMS', queries);
     }
 
     return payload;
   } catch (error) {
-    if (process.dev && process.server) {
-      console.error('[api/news] request failed', error);
-    }
     throw createError({
       statusCode: 502,
       statusMessage: 'Failed to fetch articles from microCMS',

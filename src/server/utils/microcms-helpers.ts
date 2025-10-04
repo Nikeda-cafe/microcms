@@ -1,5 +1,5 @@
 import { createClient } from 'microcms-js-sdk';
-import type { MicroCMSListResponse, MicroCMSQueries } from 'microcms-js-sdk';
+import type { MicroCMSQueries } from 'microcms-js-sdk';
 import { useRuntimeConfig } from '#imports';
 import type { Article, Category, Tag, EyecatchImage, ArticleListResponse } from '~/types/blog';
 
@@ -68,42 +68,27 @@ export const sampleArticles: Article[] = [
   }
 ];
 
-let cachedClient: MicroCMSClient = null;
-let cachedServiceDomain: string | null = null;
-
-export const sanitizeServiceDomain = (domain: string): string => {
-  if (!domain) {
-    return '';
-  }
-
-  let sanitized = domain.trim();
-  sanitized = sanitized.replace(/^https?:\/\//i, '');
-  sanitized = sanitized.replace(/\.microcms\.io.*$/i, '');
-  sanitized = sanitized.replace(/\/.*/, '');
-  return sanitized;
+export const sanitizeServiceDomain = (value: string): string => {
+  const trimmed = value?.trim() ?? '';
+  return trimmed
+    .replace(/^https?:\/\//i, '')
+    .replace(/\.microcms\.io.*$/i, '')
+    .replace(/\/.*/, '');
 };
 
-export const getCachedServiceDomain = (): string | null => cachedServiceDomain;
-
-export const getMicroCMSClient = (): MicroCMSClient => {
-  if (cachedClient) {
-    return cachedClient;
-  }
-
+export const createMicroCMSClient = (): MicroCMSClient => {
   const config = useRuntimeConfig();
-  const serviceDomain = sanitizeServiceDomain(config.microcmsServiceDomain ?? '');
+  const domain = sanitizeServiceDomain(config.microcmsServiceDomain ?? '');
+  const apiKey = config.microcmsApiKey ?? '';
 
-  if (!serviceDomain || !config.microcmsApiKey) {
+  if (!domain || !apiKey) {
     return null;
   }
 
-  cachedClient = createClient({
-    serviceDomain,
-    apiKey: config.microcmsApiKey
+  return createClient({
+    serviceDomain: domain,
+    apiKey
   });
-  cachedServiceDomain = serviceDomain;
-
-  return cachedClient;
 };
 
 export const mapArticle = (entry: MicroCMSArticle): Article => ({
@@ -119,53 +104,35 @@ export const mapArticle = (entry: MicroCMSArticle): Article => ({
   eyecatch: entry.eyecatch ?? entry.thumbnail ?? null
 });
 
-const sortArticles = (articles: Article[], orders?: string) => {
-  if (!orders) {
-    return articles;
-  }
-
-  const direction = orders.startsWith('-') ? -1 : 1;
-  const field = orders.replace(/^-/, '');
-
-  const sortableFields: Array<keyof Article> = ['publishedAt', 'updatedAt'];
-  if (!sortableFields.includes(field as keyof Article)) {
-    return articles;
-  }
-
-  return [...articles].sort((a, b) => {
-    const left = a[field as keyof Article];
-    const right = b[field as keyof Article];
-
-    if (typeof left === 'string' && typeof right === 'string') {
-      const leftTime = Date.parse(left);
-      const rightTime = Date.parse(right);
-
-      if (!Number.isNaN(leftTime) && !Number.isNaN(rightTime)) {
-        return (leftTime - rightTime) * direction;
-      }
-
-      return left.localeCompare(right) * direction;
-    }
-
-    return direction;
-  });
-};
-
-interface SampleListParams {
+type SampleListParams = {
   limit?: number;
   offset?: number;
   orders?: string;
   category?: string;
   tag?: string;
-}
+};
 
-export const buildSampleListResponse = ({
-  limit,
-  offset,
-  orders,
-  category,
-  tag
-}: SampleListParams): ArticleListResponse => {
+const sortArticles = (articles: Article[], orders?: string) => {
+  if (!orders) {
+    return articles;
+  }
+
+  const field = orders.startsWith('-') ? orders.slice(1) : orders;
+  const direction = orders.startsWith('-') ? -1 : 1;
+
+  if (!['publishedAt', 'updatedAt'].includes(field)) {
+    return articles;
+  }
+
+  return [...articles].sort((a, b) => {
+    const left = Date.parse(String(a[field as keyof Article] ?? ''));
+    const right = Date.parse(String(b[field as keyof Article] ?? ''));
+    return (left - right) * direction;
+  });
+};
+
+export const buildSampleList = (params: SampleListParams = {}): ArticleListResponse => {
+  const { limit, offset, orders, category, tag } = params;
   let articles = [...sampleArticles];
 
   if (category) {
@@ -180,66 +147,42 @@ export const buildSampleListResponse = ({
 
   articles = sortArticles(articles, orders);
 
-  const resolvedOffset = offset ?? 0;
-  const resolvedLimit = limit ?? articles.length;
-  const sliced = articles.slice(resolvedOffset, resolvedOffset + resolvedLimit);
+  const safeOffset = Math.max(0, offset ?? 0);
+  const safeLimit = limit ?? articles.length;
 
   return {
     totalCount: articles.length,
-    offset: resolvedOffset,
-    limit: resolvedLimit,
-    contents: sliced
+    offset: safeOffset,
+    limit: safeLimit,
+    contents: articles.slice(safeOffset, safeOffset + safeLimit)
   };
 };
 
-export const buildMicroCMSQueries = (
-  query: Record<string, string | string[] | undefined>
-): MicroCMSQueries => {
+export const findSampleArticle = (slug: string): Article | null => {
+  return sampleArticles.find((article) => article.slug === slug || article.id === slug) ?? null;
+};
+
+export const buildMicroCMSQueries = (params: SampleListParams): MicroCMSQueries => {
   const queries: MicroCMSQueries = {};
 
-  const numberKeys: Array<keyof Pick<MicroCMSQueries, 'limit' | 'offset' | 'depth'>> = [
-    'limit',
-    'offset',
-    'depth'
-  ];
+  if (typeof params.limit === 'number') {
+    queries.limit = params.limit;
+  }
 
-  numberKeys.forEach((key) => {
-    const value = query[key];
-    if (value === undefined) {
-      return;
-    }
-    const parsed = Number(value);
-    if (!Number.isNaN(parsed)) {
-      queries[key] = parsed;
-    }
-  });
+  if (typeof params.offset === 'number') {
+    queries.offset = params.offset;
+  }
 
-  const stringKeys: Array<keyof Pick<MicroCMSQueries, 'fields' | 'orders' | 'filters' | 'q'>> = [
-    'fields',
-    'orders',
-    'filters',
-    'q'
-  ];
-
-  stringKeys.forEach((key) => {
-    const value = query[key];
-    if (value !== undefined) {
-      queries[key] = String(value);
-    }
-  });
+  if (params.orders) {
+    queries.orders = params.orders;
+  }
 
   const filters: string[] = [];
-
-  if (query.category) {
-    filters.push(`category[equals]${query.category}`);
+  if (params.category) {
+    filters.push(`category[equals]${params.category}`);
   }
-
-  if (query.tag) {
-    filters.push(`tags[contains]${query.tag}`);
-  }
-
-  if (queries.filters) {
-    filters.push(String(queries.filters));
+  if (params.tag) {
+    filters.push(`tags[contains]${params.tag}`);
   }
 
   if (filters.length) {
@@ -249,38 +192,29 @@ export const buildMicroCMSQueries = (
   return queries;
 };
 
-export const buildSampleQueries = (
-  query: Record<string, string | string[] | undefined>
+export const parseQueryParams = (
+  input: Record<string, string | string[] | undefined>
 ): SampleListParams => {
-  const params: SampleListParams = {};
-
-  if (query.limit !== undefined) {
-    const parsed = Number(query.limit);
-    if (!Number.isNaN(parsed)) {
-      params.limit = parsed;
+  const pickNumber = (value: string | string[] | undefined) => {
+    if (value === undefined) {
+      return undefined;
     }
-  }
+    const parsed = Number(Array.isArray(value) ? value[0] : value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  };
 
-  if (query.offset !== undefined) {
-    const parsed = Number(query.offset);
-    if (!Number.isNaN(parsed)) {
-      params.offset = parsed;
+  const pickString = (value: string | string[] | undefined) => {
+    if (value === undefined) {
+      return undefined;
     }
-  }
+    return String(Array.isArray(value) ? value[0] : value);
+  };
 
-  if (query.orders !== undefined) {
-    params.orders = String(query.orders);
-  }
-
-  if (query.category !== undefined) {
-    params.category = String(query.category);
-  }
-
-  if (query.tag !== undefined) {
-    params.tag = String(query.tag);
-  }
-
-  return params;
+  return {
+    limit: pickNumber(input.limit),
+    offset: pickNumber(input.offset),
+    orders: pickString(input.orders),
+    category: pickString(input.category),
+    tag: pickString(input.tag)
+  };
 };
-
-export type { MicroCMSListResponse, MicroCMSQueries };

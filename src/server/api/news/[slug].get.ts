@@ -2,9 +2,9 @@ import { defineEventHandler, createError } from 'h3';
 import type { Article } from '~/types/blog';
 import {
   ARTICLE_ENDPOINT,
-  getMicroCMSClient,
+  createMicroCMSClient,
+  findSampleArticle,
   mapArticle,
-  sampleArticles,
   type MicroCMSArticle
 } from '~/server/utils/microcms-helpers';
 
@@ -16,15 +16,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Article slug is required' });
   }
 
-  const client = getMicroCMSClient();
+  const client = createMicroCMSClient();
 
   if (!client) {
-    if (process.dev && process.server) {
-      console.warn('[api/news/:slug] microCMS client unavailable, using sample data', slug);
-    }
-    const article = sampleArticles.find(
-      (entry) => entry.slug === slug || entry.id === slug
-    );
+    const article = findSampleArticle(slug);
     if (!article) {
       throw createError({ statusCode: 404, statusMessage: 'Article not found' });
     }
@@ -32,9 +27,6 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    if (process.dev && process.server) {
-      console.log('[api/news/:slug] fetching detail', slug);
-    }
     const entry = await client.getListDetail<MicroCMSArticle>({
       endpoint: ARTICLE_ENDPOINT,
       contentId: slug
@@ -43,9 +35,6 @@ export default defineEventHandler(async (event) => {
     const article: Article = mapArticle(entry);
     return article;
   } catch (_error) {
-    if (process.dev && process.server) {
-      console.warn('[api/news/:slug] fallback to slug filter', slug, _error);
-    }
     const response = await client.getList<MicroCMSArticle>({
       endpoint: ARTICLE_ENDPOINT,
       queries: {
@@ -56,9 +45,6 @@ export default defineEventHandler(async (event) => {
     });
 
     if (!response.contents.length) {
-      if (process.dev && process.server) {
-        console.error('[api/news/:slug] not found', slug, _error);
-      }
       throw createError({ statusCode: 404, statusMessage: 'Article not found' });
     }
 

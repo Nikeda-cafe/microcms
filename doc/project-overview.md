@@ -7,7 +7,7 @@
 ## 1. プロジェクト概要
 
 - フロントエンド: **Nuxt3 (TypeScript)**
-- 状態管理: **Pinia**
+- 状態管理: なし（各ページで `useFetch` を直接利用）
 - コンテンツ管理: **microCMS** の `news` エンドポイント
 - マークダウン描画: `markdown-it`
 - CSS: 主要部分はコンポーネントスコープスタイル (Tailwind 等は未導入)
@@ -60,22 +60,31 @@ src/server/
 
 ### 4.1 `src/server/utils/microcms-helpers.ts`
 
-- `createClient` で microCMS クライアントを生成し、プロセス内でキャッシュ。
-- 認証情報が無い場合は `null` を返し、同ファイルにある `sampleArticles` を利用。
-- クエリパラメータを microCMS 用に整形する `buildMicroCMSQueries`、サンプルデータ用に整形する `buildSampleQueries` を提供。
-- microCMS のレスポンスを `Article` 型に変換する `mapArticle` を共通化。
+- `createMicroCMSClient()` が環境変数からクライアントを生成し、設定が無いときは `null` を返します。
+- フロントから渡されたクエリを素直にパースする `parseQueryParams()` を提供。
+- 認証が無い場合は `buildSampleList()` と `findSampleArticle()` がサンプル記事を返します。
+- microCMS のレスポンスを `Article` 型に変換する `mapArticle()` を共通化。
+- サービスドメインの正規化（`sanitizeServiceDomain()`）や microCMS SDK に渡すクエリ生成 (`buildMicroCMSQueries()`) もこのファイルで一括管理しています。
 
 ### 4.2 `src/server/api/news/index.get.ts`
 
-- クライアントからのクエリ (`limit` / `offset` / `orders` / `category` / `tag` など) を受け取り、microCMS を呼び出す。
-- 開発環境ではアクセス先の microCMS URL をサーバログに出力。
-- 認証が無い場合はサンプルデータに対して同じ条件でフィルター・ソートした結果を返します。
+- 一覧取得用の GET エンドポイント。`/api/news?limit=6` などのリクエストを処理します。
+- 実行手順
+  1. `getQuery(event)` の結果を `parseQueryParams()` に渡して型安全なパラメータへ変換。
+  2. `createMicroCMSClient()` でクライアントを生成し、存在しなければ `buildSampleList()` の結果を即返却。
+  3. 認証がある場合は `buildMicroCMSQueries()` で microCMS 用クエリを組み立て、`client.getList()` を実行。
+  4. 取得結果を `mapArticle()` でアプリ用の `Article` 配列へ変換し、`ArticleListResponse` として返します。
+- 失敗した場合は 502 エラーを投げ、フロントでは通常のエラーメッセージとして扱えます。
 
 ### 4.3 `src/server/api/news/[slug].get.ts`
 
-- `slug` (microCMS の `id` 相当) を受け取り、詳細情報を取得。
-- `getListDetail` で見つからない場合は `slug` フィルターで再検索し、最終的に存在しなければ 404 を返却。
-- 認証情報が無い場合はサンプル記事の中から一致するものを返します。
+- 記事詳細用の GET エンドポイント。`/api/news/xxxxx` というアクセスを処理します。
+- 実行手順
+  1. ルートパラメータから `slug` を取得し、空なら 400 エラー。
+  2. `createMicroCMSClient()` が `null` の場合は `findSampleArticle()` を使ってサンプルから検索し、無ければ 404。
+  3. microCMS へアクセスできる場合は `client.getListDetail()` を呼び、ヒットした記事を `mapArticle()` で整形して返却。
+  4. `getListDetail()` で見つからずエラーになった場合のみ、`slug` フィルターで再検索し、見つからなければ 404 を返します。
+- これにより API キーの有無に関係なく、同じフロント実装で詳細ページを扱えます。
 
 ---
 
